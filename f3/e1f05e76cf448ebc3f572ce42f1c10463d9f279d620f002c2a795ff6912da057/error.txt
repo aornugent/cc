@@ -1,0 +1,6 @@
+Informational Message: The current Metropolis proposal is about to be rejected because of the following issue:
+Exception: normal_lpdf: Scale parameter[1] is 0, but must be > 0!  (in '/home/andrewo/cc/model-binaries/field_mean3.stan' at line 87)
+
+If this warning occurs sporadically, such as for highly constrained variable types like covariance matrices, then the sampler is fine,
+but if this warning occurs often then your model may be either severely ill-conditioned or misspecified.
+

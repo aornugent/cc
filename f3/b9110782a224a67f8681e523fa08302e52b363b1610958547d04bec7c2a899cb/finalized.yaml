@@ -1,0 +1,45 @@
+project_id: field_mean
+method: sample
+sample:
+  num_samples: 500
+  num_warmup: 500
+  save_warmup: 1
+  thin: 1
+  algorithm: hmc
+  hmc:
+    engine: nuts
+    nuts:
+      max_depth: 15
+    static:
+      int_time: 6.28
+    metric: diag_e
+    stepsize: 1
+    stepsize_jitter: 0
+output:
+  refresh: 1
+  terminal: ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb/terminal.txt
+  error: ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb/error.txt
+  file: ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb/output.csv
+  diagnostic_file: ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb/diagnostics.csv
+  control: ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb/control.yaml
+target_dir: ouput/f3
+data_dir: data
+init_dir: inits
+model_dir: models
+binary_dir: model-binaries
+data:
+  file: data/CC.data.R
+replicates: 4
+model_name: field_mean3
+binary: /home/andrewo/cc/model-binaries/field_mean3
+replicate: 1
+model_path: /home/andrewo/cc/models/field_mean3.stan
+hash: b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb
+wait: yes
+fit_path: ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb
+run: yes
+command: /home/andrewo/cc/model-binaries/field_mean3 method=sample  num_samples=500
+  num_warmup=500 save_warmup=1 thin=1  algorithm=hmc engine=nuts  max_depth=15  metric=diag_e  stepsize=1
+  stepsize_jitter=0  data  file=data/CC.data.R   output  file=ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb/output.csv
+  diagnostic_file=ouput/f3/b9110782a224a67f8681e523fa08302e52b363b1610958547d04bec7c2a899cb/diagnostics.csv
+  refresh=1
