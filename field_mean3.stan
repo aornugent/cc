@@ -28,7 +28,7 @@ data {
 }
 transformed data{
   // Standardise
-  vector[N] y_std = y_obs ./ obs_sd[obs];
+  vector[N] y_std = (y_obs ./ obs_sd[obs]) * obs_sd[12];
 }
 parameters{
   // intercepts
@@ -102,5 +102,15 @@ model{
   u_raw ~ normal(0, 1);
   sigma_u ~ normal(0, 1);
   sigma_e ~ normal(0, 1);
+}
+generated quantities{
+  vector[T] y_hat[N_pop];
+  
+  for(i in 1:N_pop){
+    y_hat[i, 1] = (1 - delta) * p0_raw[i] * sigma_p;
+    for(j in 2:T){
+      y_hat[i, j] = (1 - delta) * y_hat[i, j - 1] + delta * p_raw[i] * sigma_p;
+    }
+  }
 }
 

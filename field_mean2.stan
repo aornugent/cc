@@ -104,3 +104,14 @@ model{
   sigma_log_u ~ normal(0, 1);
   sigma_log_e ~ normal(0, 1);
 }
+generated quantities{
+  vector[T] y_hat[N_pop];
+  
+  for(i in 1:N_pop){
+    y_hat[i, 1] = (1 - delta) * exp(log_p0_raw[i] * sigma_log_p);
+    for(j in 2:T){
+      y_hat[i, j] = (1 - delta) * y_hat[i, j - 1] + 
+          delta * exp(log_p_raw[i] * sigma_log_p);
+    }
+  }
+}
