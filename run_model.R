@@ -18,10 +18,13 @@ run_models <- function(model = "f1", fields = 92, censored = T, variant = 1) {
   output$data_list$model_variant = variant
   output$data_list$cen = if_else(censored, 1, 0)
   
+  str(output$data_list)
+  
   output$fit <- stan(file = output$model_file,
               data =output$data_list,
-              chains = 4,
-              iter = 300)
+              chains = 1,
+              iter = 300,
+              init_r = 0.5)
   
   censored <- switch(
     T = "censored",
@@ -75,8 +78,6 @@ format_data <- function(fields) {
     pop = x$pop,
     meas = x$meas
   )
-
-  str(data_list)
   
   return(data_list)
 }
@@ -86,7 +87,7 @@ load_data <- function(fields) {
   # Chronosequence plots have burned and unburned treatments.
   # Restoration has 7 different contrasts, including negative controls.
   # Consider C- same as R-, ignoring quadrat level differences.
-  plots <- read_csv("../data/CC_plot_data.csv", guess_max = 1e4) %>%
+  plots <- read_csv("data/CC_plot_data.csv", guess_max = 1e4) %>%
     mutate(rest = case_when(burned == 0 ~ "R-",
                             burned == 1 ~ "RB-",
                             T ~ restoration93),
@@ -101,7 +102,7 @@ load_data <- function(fields) {
   # Group by origin and functional group. 
   # Note: Poa pratensis considered 'Introduced' in this study as origin 
   #       unknown but a weed in Minnesota. 
-  dat <- read_csv("../data/CC_species_data.csv", 
+  dat <- read_csv("data/CC_species_data.csv", 
                   col_types = "ciiccdddddcccccccc") %>%
     select(-count, -pres) %>%
     gather(meas, val, biomass:pcover) %>%

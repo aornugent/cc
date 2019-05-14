@@ -153,8 +153,10 @@ model{
     // Abundance follows lognormal distn.
     y[m_obs] ~ lognormal(log_mu[m_obs], delta_log_e[m_obs]);
     
-    // Integrate out meas. below detection
-    //target += lognormal_lcdf(L[meas[m_mis]] | log_mu[m_mis], delta_log_e[m_mis]);
+    if(cen == 1){
+      // Integrate out meas. below detection
+      target += lognormal_lcdf(L[meas[m_mis]] | log_mu[m_mis], delta_log_e[m_mis]);
+    }
   }
   
   // priors
@@ -165,7 +167,7 @@ model{
   
   tK_raw ~ normal(0, 1);
   tmax_raw ~ beta(4, 4);
-  sigma_t ~ normal(0, 1);
+  sigma_t ~ cauchy(0, 1);
   
   log_beta_raw ~ normal(0, 1);
   sigma_log_b ~ normal(0, 1);
