@@ -1,6 +1,8 @@
 #' utils
 
-run_models <- function(model = "f1", fields = 92, censored = T, variant = 1) {
+run_models <- function(model = "f1", fields = 92, 
+                       censored = T, variant = 1,
+                       chains = 4, iter = 300) {
 
   output <- list(
     model = model,
@@ -8,24 +10,22 @@ run_models <- function(model = "f1", fields = 92, censored = T, variant = 1) {
     censored = censored,
     model_file = switch(model,
       f1 = "cc/f1/field_mean1.stan",
-      f1N = "cc/f1/field_mean1N.stan",
       f2 = "cc/f2/field_mean2.stan",
-      f2N = "cc/f2/field_mean2N.stan",
       f3 = "cc/f3/field_mean3.stan"),
     data_list = format_data(fields)
   )
   
+  if(model != "f3")
+    variant = 1
+  
   output$data_list$model_variant = variant
   output$data_list$cen = if_else(censored, 1, 0)
-  
-  str(output$data_list)
-  
+
   output$fit <- stan(file = output$model_file,
-              data =output$data_list,
-              chains = 1,
-              iter = 300,
-              init_r = 0.5)
-  
+                     data = output$data_list,
+                     chains = chains,
+                     iter = iter)
+        
   censored <- switch(
     T = "censored",
     F = "uncensored"
@@ -49,7 +49,6 @@ format_data <- function(fields) {
   x <- get_x(y)
   t <- get_t(x)
   
-  message("\nStan data structure")
   data_list <- list(
     T = max(t$t),
     N = nrow(x),
