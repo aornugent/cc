@@ -61,19 +61,21 @@ data {
   int<lower=1, upper=N_grp> grp_pop[N_pop];
 }
 parameters{
-  // carrying capacities
-  vector<lower=0>[N_pop] pK_raw;
-  real<lower=0> sigma_p;
+  // latent starting point
+  vector<lower=0>[N_pop] p0;
+  
+  // mean abundance
+  vector<lower=0>[N_pop] alpha_raw;
+  real<lower=0> sigma_alpha;
   
   // predictors ordered so R- x N_grp at start
   vector<lower=0>[N_trt - N_grp] beta_raw;
-  vector<lower=0>[N_grp] mu_b;
   vector<lower=0>[N_grp] sigma_b;
   
   // correlation of error
   vector<lower=0, upper=1>[N_grp] delta;
   
-  // plot random effects
+  // plot random effectsQ
   vector<lower=0>[N_plt] u_raw;
   vector<lower=0>[N_grp] sigma_u;
   
@@ -82,62 +84,62 @@ parameters{
 }
 transformed parameters {
     // non-centered parameters
-    vector[N_pop] pK = pK_raw * sigma_p;
+    vector[N_pop] alpha = alpha_raw * sigma_alpha;
     vector[N_plt] u = u_raw .* sigma_u[grp_plt];
-    vector[N_trt - N_grp] beta = mu_b[grp_trt] + beta_raw .* sigma_b[grp_trt];
+    vector[N_trt - N_grp] beta = beta_raw .* sigma_b[grp_trt];
 }
 model{
   {
     vector[N_trt] beta_ref;
-    vector[N] mu_plt;
+    vector[N] mu;
     vector[N] delta_gm;
-    vector[N] log_mu;
-    vector[N] delta_log_e;
+    vector[N] lambda;
+    vector[N] sigma_log_m;
     
     // Intercepts only
     // Set reference class to one
     beta_ref = append_row(rep_vector(1.0, N_grp), beta);
     
     // Multiplicative fixed and random effects
-    mu_plt = pK[pop] .* u[plt] .* beta_ref[trt];
+    mu = alpha[pop] .* u[plt] .* beta_ref[trt];
     
 
     // Stochastic model
     // Adjustment for irregular meas.
     delta_gm = exp(log(delta[grp]) .* gm);
     
-    // Use mean for first meas.
-    log_mu[m1] = log(delta_gm[m1] .* (pK[pop[m1]] .* u[plt[m1]]) + 
-                    (1 - delta_gm[m1]) .* mu_plt[m1]);
+    // Use latent obs for first meas.
+    lambda[m1] = delta_gm[m1] .* p0[pop[m1]] .* u[plt[m1]] + 
+                        (1 - delta_gm[m1]) .* mu[m1];
     
-    // Lagged meas. for reamainder
-    log_mu[m] = log(delta_gm[m] .* y[m_m1] + (1 - delta_gm[m]) .* mu_plt[m]);
+    // Lagged meas. for remainder
+    lambda[m] = delta_gm[m] .* y[m_m1] + (1 - delta_gm[m]) .* mu[m];
 
 
     // Measurement model
     // Uncertainty increases with time between meas.
-    delta_log_e = (1 - delta_gm) ./ (1 - delta[grp]) .* sigma_log_e[grp];
+    sigma_log_m = (1 - delta_gm) ./ (1 - delta[grp]) .* sigma_log_e[grp];
     
     // Abundance follows lognormal distn.
-    y[m_obs] ~ lognormal(log_mu[m_obs], delta_log_e[m_obs]);
+    y[m_obs] ~ lognormal(log(lambda[m_obs]), sigma_log_m[m_obs]);
     
     if(cen == 1){
       // Integrate out meas. below detection
-      target += lognormal_lcdf(L[meas[m_mis]] | log_mu[m_mis], delta_log_e[m_mis]);
+      target += lognormal_lcdf(L[meas[m_mis]] | log(lambda[m_mis]), sigma_log_m[m_mis]);
     }
   }
   
   // priors
-  pK_raw ~ normal(0, 1);
-  sigma_p ~ normal(0, 1);
+  p0 ~ lognormal(log(alpha), sigma_log_e[grp_pop]);
+  alpha_raw ~ normal(1, 1);
+  sigma_alpha ~ normal(0, 1);
   
-  beta_raw ~ normal(0, 1);
-  mu_b ~ normal(1, 1);
+  beta_raw ~ normal(1, 1);
   sigma_b ~ normal(0, 1);
   
   delta ~ beta(1, 1);
   
-  u_raw ~ normal(0, 1);
+  u_raw ~ normal(1, 1);
   sigma_u ~ normal(0, 1);
   sigma_log_e ~ normal(0, 1);
 }

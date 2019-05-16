@@ -2,7 +2,7 @@
 
 run_models <- function(model = "f1", fields = 92, 
                        censored = T, variant = 1,
-                       chains = 4, iter = 300) {
+                       chains = 4, iter = 400) {
 
   output <- list(
     model = model,
@@ -26,13 +26,9 @@ run_models <- function(model = "f1", fields = 92,
                      chains = chains,
                      iter = iter)
         
-  censored <- switch(
-    T = "censored",
-    F = "uncensored"
-  )
 
   output$ouput_file <- paste0(gsub("\\.stan", "", output$model_file), 
-                       censored, "v", variant, ".fit.Rdata")
+                              "c", censored, "v", variant, ".fit.Rdata")
   
   save(file = output$ouput_file, output)
   message("Model saved")
