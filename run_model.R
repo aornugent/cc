@@ -25,10 +25,16 @@ run_models <- function(model = "f1", fields = 92,
                      data = output$data_list,
                      chains = chains,
                      iter = iter)
+  
+  censored <- switch(censored,
+                     T = "censored",
+                     F = "uncensored")
+  
+  n_fields <- output$data_list$N_pop / output$data_list$N_grp 
         
 
   output$ouput_file <- paste0(gsub("\\.stan", "", output$model_file), 
-                              "c", censored, "v", variant, ".fit.Rdata")
+                              "f", n_fields, "v", variant, censored, ".fit.Rdata")
   
   save(file = output$ouput_file, output)
   message("Model saved")
