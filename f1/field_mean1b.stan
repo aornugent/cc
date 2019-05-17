@@ -33,16 +33,15 @@ data {
   int<lower=1> N_trt;   // contrasts
   int<lower=1> N_plt;   // experiments
   int<lower=1> N_pop;   // populations
-  int<lower=1> N_meas;  // measurment types
+  int<lower=1> N_meas;  // meas. types
   int<lower=0> N_mis;   // censored
   
   // data
   vector<lower=1>[N] t;      // time
   vector<lower=0>[N] y;      // abundance
   vector<lower=0>[N] gm;     // gap between meas.
-  vector<lower=0>[N_meas] L; // meas. limits
+  vector<lower=0>[N_meas] L; // limits
   int<lower=0, upper=1> cen; // switch for censoring
-  int<lower=0, upper=1> model_variant; // varying capacity, rate or both
 
   // meas. indices
   int<lower=1, upper=N> m1[N_plt];
@@ -64,19 +63,11 @@ data {
 parameters{
   // latent starting point
   vector<lower=0>[N_pop] p0;
-  vector[N_grp] mu_log_p0;
   
-  // carrying capacity
-  vector<lower=0>[N_pop] pK_raw;
-  real<lower=0> sigma_p;
-
-  // time that carrying capacity is reached
-  vector<lower=0>[N_pop] log_tK_raw;
-  real<lower=0> sigma_log_t;
-
-  // time of max growth rate
-  vector<lower=0, upper=1>[N_pop] tmax_raw;
-
+  // mean abundance
+  vector<lower=0>[N_pop] alpha_raw;
+  real<lower=0> sigma_alpha;
+  
   // predictors ordered so R- x N_grp at start
   vector<lower=0>[N_trt - N_grp] beta_raw;
   vector<lower=0>[N_grp] sigma_b;
@@ -93,9 +84,7 @@ parameters{
 }
 transformed parameters {
     // non-centered parameters
-    vector[N_pop] pK = pK_raw * sigma_p;
-    vector[N_pop] tK = T + exp(log_tK_raw * sigma_log_t);   // bound above T
-    vector[N_pop] tmax = tmax_raw .* tK;                    // bound below tK
+    vector[N_pop] alpha = alpha_raw * sigma_alpha;
     vector[N_plt] u = u_raw .* sigma_u[grp_plt];
     vector[N_trt - N_grp] beta = beta_raw .* sigma_b[grp_trt];
 }
@@ -107,29 +96,14 @@ model{
     vector[N] lambda;
     vector[N] sigma_log_m;
     
-    // Deterministic beta curve
+    // Intercepts only
     // Set reference class to one
     beta_ref = append_row(rep_vector(1.0, N_grp), beta);
     
-     // Multiplicative fixed and random effects
-    if(model_variant == 1) {
-      mu = beta_curve(p0[pop] .* u[plt], 
-                      pK[pop] .* u[plt] .* beta_ref[trt], 
-                      tK[grp], tmax[grp], t, N);
-    }
-    else if (model_variant == 2){
-      mu = beta_curve(p0[pop] .* u[plt], 
-                      pK[pop] .* u[plt], 
-                      tK[grp] .* beta_ref[trt],
-                      tmax[grp] .* beta_ref[trt], t, N);
-    }
-    else if (model_variant == 3) {
-      mu = beta_curve(p0[pop] .* u[plt], 
-                      pK[pop] .* u[plt] .* beta_ref[trt], 
-                      tK[grp] .* beta_ref[trt],
-                      tmax[grp] .* beta_ref[trt], t, N);
-    }
+    // Multiplicative fixed and random effects
+    mu = alpha[pop] .* u[plt] .* beta_ref[trt];
     
+
     // Stochastic model
     // Adjustment for irregular meas.
     delta_gm = exp(log(delta[grp]) .* gm);
@@ -147,23 +121,20 @@ model{
     sigma_log_m = (1 - delta_gm) ./ (1 - delta[grp]) .* sigma_log_e[grp];
     
     // Abundance follows lognormal distn.
-    y[m_obs] ~ lognormal(log(lambda[m_obs]), sigma_log_m[m_obs]);
+    y[m_obs] ~ lognormal(log(lambda[m_obs] ./ sigma_log_m[m_obs]), sigma_log_m[m_obs]);
     
     if(cen == 1){
       // Integrate out meas. below detection
-      target += lognormal_lcdf(L[meas[m_mis]] | log(lambda[m_mis]), sigma_log_m[m_mis]);
+      target += lognormal_lcdf(L[meas[m_mis]] | 
+                                log(log(lambda[m_obs] ./ sigma_log_m[m_obs])),
+                                sigma_log_m[m_mis]);
     }
   }
   
   // priors
-  p0 ~ lognormal(mu_log_p0[grp_pop], sigma_log_e[grp_pop]);
-  mu_log_p0 ~ normal(0, 1);
-  pK_raw ~ normal(1, 1);
-  sigma_p ~ normal(0, 1);
-  
-  log_tK_raw ~ normal(0, 1);
-  tmax_raw ~ beta(4, 4);
-  sigma_log_t ~ normal(0, 1);
+  p0 ~ lognormal(log(alpha), sigma_log_e[grp_pop]);
+  alpha_raw ~ normal(1, 1);
+  sigma_alpha ~ normal(0, 1);
   
   beta_raw ~ normal(1, 1);
   sigma_b ~ normal(0, 1);
