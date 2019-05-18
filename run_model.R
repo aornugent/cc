@@ -2,7 +2,7 @@
 
 run_models <- function(model = "f1", fields = 92, 
                        censored = T, variant = 1,
-                       chains = 4, iter = 400) {
+                       chains = 4, iter = 400, init_r = 0.5) {
 
   output <- list(
     model = model,
@@ -10,7 +10,9 @@ run_models <- function(model = "f1", fields = 92,
     censored = censored,
     model_file = switch(model,
       f1 = "cc/f1/field_mean1.stan",
+      f1b = "cc/f1/field_mean1b.stan",      
       f2 = "cc/f2/field_mean2.stan",
+      f2b = "cc/f2/field_mean2b.stan",
       f3 = "cc/f3/field_mean3.stan"),
     data_list = format_data(fields)
   )
@@ -24,7 +26,8 @@ run_models <- function(model = "f1", fields = 92,
   output$fit <- stan(file = output$model_file,
                      data = output$data_list,
                      chains = chains,
-                     iter = iter)
+                     iter = iter,
+                     init_r = init_r)
   
   censored <- switch(censored,
                      T = "censored",
@@ -36,7 +39,7 @@ run_models <- function(model = "f1", fields = 92,
   output$ouput_file <- paste0(gsub("\\.stan", "", output$model_file), 
                               "f", n_fields, "v", variant, censored, ".fit.Rdata")
   
-  save(file = output$ouput_file, output)
+  save(file = output$ouput_file, "output")
   message("Model saved")
   
   str(output, max.level = 1)
@@ -158,10 +161,10 @@ get_y <- function(fields, quietly = F) {
 
 get_L <- function(y) {
   # Find detection limits of each survey
-  L <- group_by(y, meas, year) %>%
+  L <- group_by(y, year) %>%
     summarise(min = min(abun_std[abun_std > 0])) %>%
     ungroup() %>%
-    mutate(meas = as.numeric(factor(paste(year, meas)))) %>%
+    mutate(meas = as.numeric(factor(paste(year)))) %>%
     arrange(year)
 }
 
@@ -175,7 +178,7 @@ get_x <- function(y) {
            plt = as.numeric(factor(paste(as.numeric(group), plot_id))),
            pop = as.numeric(factor(paste(as.numeric(group), field))),
            trt = grp + (as.numeric(rest) - 1) * max(grp),
-           meas = as.numeric(factor(paste(year, meas))),
+           meas = as.numeric(factor(year)),
            mis = if_else(abun_std == 0, 1, 0)) %>%
     arrange(plt, year)
 }
@@ -199,4 +202,19 @@ nested <- function(x, y){
   nestbl <- table(factor(x), factor(y))
   idx <- unname(apply(nestbl, 1, function(x) which(x > 0)))
   return(idx)
+}
+
+get_p <- function(x) {
+  select(x, field, group, pop, grp, ab) %>%
+    unique()
+}
+
+get_u <- function(x) {
+  select(x, field, plot_id, group, plt) %>%
+    unique()
+}
+
+get_g <- function(x) {
+  select(x, trt, rest, group) %>%
+    unique()
 }

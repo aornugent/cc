@@ -65,9 +65,11 @@ parameters{
   vector<lower=0>[N_pop] p0;
   
   // mean abundance
-  vector<lower=0>[N_pop] p;
+  vector<lower=0>[N_pop] pK;
   vector<lower=0>[N_grp] mu_p;
   real<lower=0> sigma_p;
+  
+  vector<lower=0>[N_grp] rK;
   
   // predictors ordered so R- x N_grp at start
   vector<lower=0>[N_trt - N_grp] beta;
@@ -98,8 +100,9 @@ model{
     beta_ref = append_row(rep_vector(1.0, N_grp), beta);
     
     // Multiplicative fixed and random effects
-    lambda = p[pop] .* u[plt] .* beta_ref[trt];
-    
+    lambda = gompertz_curve(p0[pop] .* u[plt], 
+                            pK[pop] .* u[plt] .* beta_ref[trt], 
+                            rK[grp], t, N);
 
     // Stochastic model
     // Adjustment for irregular meas.
@@ -133,15 +136,17 @@ model{
   
   // priors
   {
-    vector[N_pop] log_p;
+    vector[N_pop] log_1;
     vector[N_pop] log_sigma_e_sq;
-    log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop] ./ (p .* p));
-    log_p = log(p) - 0.5 * log_sigma_e_sq;
-    p0 ~ lognormal(log_p, sqrt(log_sigma_e_sq));
+    log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop]);
+    log_1 = log(1) - 0.5 * log_sigma_e_sq;
+    p0 ~ lognormal(log_1, sqrt(log_sigma_e_sq));
   }
-  p ~ normal(mu_p[grp_pop], sigma_p);
-  mu_p ~ normal(0, 1);
+  pK ~ normal(mu_p[grp_pop], sigma_p);
+  mu_p ~ normal(1, 1);
   sigma_p ~ normal(0, 1);
+  
+  rK ~ normal(0, 1);
   
   beta ~ normal(1, sigma_b);
   sigma_b ~ normal(0, 1);
