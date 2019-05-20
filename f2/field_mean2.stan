@@ -62,91 +62,103 @@ data {
 }
 parameters{
   // latent starting point
-  vector<lower=0>[N_pop] p0_raw;
+  vector<lower=0>[N_pop] p0;
+  vector<lower=0>[N_grp] mu_p0;
   
-  // carrying capacity
-  vector<lower=0>[N_pop] pK_raw;
+  // mean abundance
+  vector<lower=0>[N_pop] pK;
+  vector<lower=0>[N_grp] mu_pK;
   real<lower=0> sigma_p;
   
-  // growth rate
   vector<lower=0>[N_pop] rK;
+  vector<lower=0>[N_grp] mu_rK;
+  real<lower=0> sigma_r;
   
   // predictors ordered so R- x N_grp at start
-  vector<lower=0>[N_trt - N_grp] beta_raw;
-  vector<lower=0>[N_grp] sigma_b;
+  vector<lower=0>[N_trt - N_grp] beta;
+  real<lower=0> sigma_b;
   
   // correlation of error
   vector<lower=0, upper=1>[N_grp] delta;
   
   // plot random effectsQ
-  vector<lower=0>[N_plt] u_raw;
-  vector<lower=0>[N_grp] sigma_u;
+  vector<lower=0>[N_plt] u;
+  real<lower=0> sigma_u;
   
   // obs. error
-  vector<lower=0>[N_grp] sigma_log_e;
-}
-transformed parameters {
-    // non-centered parameters
-    vector[N_pop] p0 = p0_raw * sigma_p;
-    vector[N_pop] pK = pK_raw * sigma_p;
-    vector[N_plt] u = u_raw .* sigma_u[grp_plt];
-    vector[N_trt - N_grp] beta = beta_raw .* sigma_b[grp_trt];
+  vector<lower=0>[N_grp] sigma_e_sq;
 }
 model{
   {
     vector[N_trt] beta_ref;
-    vector[N] mu;
     vector[N] delta_gm;
     vector[N] lambda;
-    vector[N] sigma_log_m;
+    vector[N] mu;
+    vector[N] log_mu;
+    vector[N] log_sigma_m_sq;
     
     // Intercepts only
     // Set reference class to one
     beta_ref = append_row(rep_vector(1.0, N_grp), beta);
     
     // Multiplicative fixed and random effects
-    mu = gompertz_curve(p0[pop] .* u[plt], 
+    lambda = gompertz_curve(p0[pop] .* u[plt], 
                             pK[pop] .* u[plt] .* beta_ref[trt], 
                             rK[pop], t, N);
-
     // Stochastic model
     // Adjustment for irregular meas.
     delta_gm = exp(log(delta[grp]) .* gm);
     
     // Use latent obs for first meas.
-    lambda[m1] = delta_gm[m1] .* p0[pop[m1]] .* u[plt[m1]] + 
-                        (1 - delta_gm[m1]) .* mu[m1];
+    mu[m1] = lambda[m1] + delta_gm[m1] .*(p0[pop[m1]] .* u[plt[m1]] - lambda[m1]);
     
     // Lagged meas. for remainder
-    lambda[m] = delta_gm[m] .* y[m_m1] + (1 - delta_gm[m]) .* mu[m];
-
+    mu[m] = lambda[m] + delta_gm[m] .* (y[m_m1] - lambda[m]);
+    
 
     // Measurement model
     // Uncertainty increases with time between meas.
-    sigma_log_m = (1 - delta_gm) ./ (1 - delta[grp]) .* sigma_log_e[grp];
+    log_sigma_m_sq = log(1 + ((sigma_e_sq[grp] .* (delta_gm - 1)) ./ 
+                              ((mu .* mu) .* (delta[grp] - 1))));
+    
+   // Transform to log scale
+    log_mu = log(mu) - 0.5 * log_sigma_m_sq;
     
     // Abundance follows lognormal distn.
-    y[m_obs] ~ lognormal(log(lambda[m_obs]), sigma_log_m[m_obs]);
+    y[m_obs] ~ lognormal(log_mu[m_obs], sqrt(log_sigma_m_sq[m_obs]));
     
     if(cen == 1){
       // Integrate out meas. below detection
-      target += lognormal_lcdf(L[meas[m_mis]] | log(lambda[m_mis]), sigma_log_m[m_mis]);
+      target += lognormal_lcdf(L[meas[m_mis]] | 
+                                log_mu[m_mis],
+                                sqrt(log_sigma_m_sq[m_mis]));
     }
   }
   
   // priors
-  p0_raw ~ normal(1, 1);
-  pK_raw ~ normal(1, 1);
+  {
+    vector[N_pop] log_mu_p0;
+    vector[N_pop] log_sigma_e_sq;
+    log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop] ./ 
+                          (mu_p0[grp_pop] .* mu_p0[grp_pop]));
+    log_mu_p0 = log(mu_p0[grp_pop]) - 0.5 * log_sigma_e_sq;
+    p0 ~ lognormal(log_mu_p0, sqrt(log_sigma_e_sq));
+  }
+  mu_p0 ~ normal(1, 1);
+  pK ~ normal(mu_pK[grp_pop], sigma_p);
+  mu_pK ~ normal(1, 1);
   sigma_p ~ normal(0, 1);
   
-  rK ~ normal(0, 1);
+  rK ~ normal(mu_rK[grp_pop], sigma_r);
+  mu_rK ~ normal(0, 1);
+  sigma_r ~ normal(0, 1);
   
-  beta_raw ~ normal(1, 1);
+  beta ~ normal(1, sigma_b);
   sigma_b ~ normal(0, 1);
   
   delta ~ beta(1, 1);
   
-  u_raw ~ normal(1, 1);
+  u ~ normal(1, sigma_u);
   sigma_u ~ normal(0, 1);
-  sigma_log_e ~ normal(0, 1);
+  sigma_e_sq ~ normal(0, 1);
 }
