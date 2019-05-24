@@ -86,7 +86,7 @@ parameters{
   real<lower=0> sigma_u;
   
   // obs. error
-  vector<lower=0>[N_grp] sigma_e_sq;
+  vector<lower=0>[N_grp] sigma_e;
 }
 model{
   {
@@ -102,15 +102,16 @@ model{
     beta_ref = append_row(rep_vector(1.0, N_grp), beta);
     
     // Multiplicative fixed and random effects
-    lambda = gompertz_curve(p0[pop] .* u[plt], 
-                            pK[pop] .* u[plt] .* beta_ref[trt], 
-                            rK[pop], t, N);
+    lambda = gompertz_curve(p0[pop], 
+                            pK[pop] .* beta_ref[trt], 
+                            rK[pop], t, N) .* u[plt];
     // Stochastic model
     // Adjustment for irregular meas.
     delta_gm = exp(log(delta[grp]) .* gm);
     
     // Use latent obs for first meas.
-    mu[m1] = lambda[m1] + delta_gm[m1] .*(p0[pop[m1]] .* u[plt[m1]] - lambda[m1]);
+    mu[m1] = lambda[m1] + delta_gm[m1] .* 
+              (p0[pop[m1]] .* u[plt[m1]] - lambda[m1]);
     
     // Lagged meas. for remainder
     mu[m] = lambda[m] + delta_gm[m] .* (y[m_m1] - lambda[m]);
@@ -118,8 +119,8 @@ model{
 
     // Measurement model
     // Uncertainty increases with time between meas.
-    log_sigma_m_sq = log(1 + ((sigma_e_sq[grp] .* (delta_gm - 1)) ./ 
-                              ((mu .* mu) .* (delta[grp] - 1))));
+    log_sigma_m_sq = log(1 + square((1 - delta_gm) ./ (1 - delta[grp]) .* 
+                                      sigma_e[grp]) ./ square(mu));
     
    // Transform to log scale
     log_mu = log(mu) - 0.5 * log_sigma_m_sq;
@@ -139,10 +140,9 @@ model{
   {
     vector[N_pop] log_mu_p0;
     vector[N_pop] log_sigma_e_sq;
-    log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop] ./ 
-                          (mu_p0[grp_pop] .* mu_p0[grp_pop]));
+    log_sigma_e_sq = log(1 + square(sigma_e[grp_pop])./ square(mu_p0[grp_pop]));
     log_mu_p0 = log(mu_p0[grp_pop]) - 0.5 * log_sigma_e_sq;
-    p0 ~ lognormal(log_mu_p0, sqrt(log_sigma_e_sq));
+    p0 ~ lognormal(1, sqrt(log_sigma_e_sq));
   }
   mu_p0 ~ normal(1, 1);
   pK ~ normal(mu_pK[grp_pop], sigma_p);
@@ -160,5 +160,5 @@ model{
   
   u ~ normal(1, sigma_u);
   sigma_u ~ normal(0, 1);
-  sigma_e_sq ~ normal(0, 1);
+  sigma_e ~ normal(0, 1);
 }
