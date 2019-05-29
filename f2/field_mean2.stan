@@ -137,13 +137,7 @@ model{
   }
   
   // priors
-  {
-    vector[N_pop] log_mu_p0;
-    vector[N_pop] log_sigma_e_sq;
-    log_sigma_e_sq = log(1 + square(sigma_e[grp_pop])./ square(mu_p0[grp_pop]));
-    log_mu_p0 = log(mu_p0[grp_pop]) - 0.5 * log_sigma_e_sq;
-    p0 ~ lognormal(1, sqrt(log_sigma_e_sq));
-  }
+  p0 ~ normal(mu_p0[grp_pop], sigma_p);
   mu_p0 ~ normal(1, 1);
   pK ~ normal(mu_pK[grp_pop], sigma_p);
   mu_pK ~ normal(1, 1);
