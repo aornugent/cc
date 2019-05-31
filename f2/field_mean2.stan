@@ -63,13 +63,13 @@ data {
 parameters{
   // latent starting point
   vector<lower=0>[N_pop] p0;
-  vector<lower=0>[N_grp] mu_p0;
   
   // mean abundance
   vector<lower=0>[N_pop] pK;
-  vector<lower=0>[N_grp] mu_pK;
+  vector<lower=0>[N_grp] mu_p;
   real<lower=0> sigma_p;
   
+  // vector<lower=0>[N_grp] rK;
   vector<lower=0>[N_pop] rK;
   vector<lower=0>[N_grp] mu_rK;
   real<lower=0> sigma_r;
@@ -91,10 +91,11 @@ parameters{
 model{
   {
     vector[N_trt] beta_ref;
-    vector[N] delta_gm;
     vector[N] lambda;
     vector[N] mu;
+    vector[N] delta_gm;
     vector[N] log_mu;
+    vector[N] sigma_m;
     vector[N] log_sigma_m_sq;
     
     // Intercepts only
@@ -102,16 +103,16 @@ model{
     beta_ref = append_row(rep_vector(1.0, N_grp), beta);
     
     // Multiplicative fixed and random effects
-    lambda = gompertz_curve(p0[pop], 
-                            pK[pop] .* beta_ref[trt], 
-                            rK[pop], t, N) .* u[plt];
+    lambda = gompertz_curve(p0[pop] .* u[plt], 
+                            pK[pop] .* u[plt] .* beta_ref[trt], 
+                            rK[pop], t, N);
+
     // Stochastic model
     // Adjustment for irregular meas.
     delta_gm = exp(log(delta[grp]) .* gm);
     
     // Use latent obs for first meas.
-    mu[m1] = lambda[m1] + delta_gm[m1] .* 
-              (p0[pop[m1]] .* u[plt[m1]] - lambda[m1]);
+    mu[m1] = lambda[m1] + delta_gm[m1] .*(p0[pop[m1]] .* u[plt[m1]] - lambda[m1]);
     
     // Lagged meas. for remainder
     mu[m] = lambda[m] + delta_gm[m] .* (y[m_m1] - lambda[m]);
@@ -119,8 +120,8 @@ model{
 
     // Measurement model
     // Uncertainty increases with time between meas.
-    log_sigma_m_sq = log(1 + square((1 - delta_gm) ./ (1 - delta[grp]) .* 
-                                      sigma_e[grp]) ./ square(mu));
+    log_sigma_m_sq = log(1 + ((1 - delta_gm) ./ (1 - delta[grp]) .* 
+                                      square(sigma_e[grp])) ./ square(mu));
     
    // Transform to log scale
     log_mu = log(mu) - 0.5 * log_sigma_m_sq;
@@ -137,16 +138,23 @@ model{
   }
   
   // priors
-  p0 ~ normal(mu_p0[grp_pop], sigma_p);
-  mu_p0 ~ normal(1, 1);
-  pK ~ normal(mu_pK[grp_pop], sigma_p);
-  mu_pK ~ normal(1, 1);
+  // {
+  //   vector[N_pop] log_1;
+  //   vector[N_pop] log_sigma_e_sq;
+  //   log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop]);
+  //   log_1 = log(1) - 0.5 * log_sigma_e_sq;
+  //   p0 ~ lognormal(log_1, sqrt(log_sigma_e_sq));
+  // }
+  p0 ~ normal(mu_p[grp_pop], sigma_p);
+  pK ~ normal(mu_p[grp_pop], sigma_p);
+  mu_p ~ normal(1, 1);
   sigma_p ~ normal(0, 1);
   
+  // rK ~ normal(0, 1);
   rK ~ normal(mu_rK[grp_pop], sigma_r);
   mu_rK ~ normal(0, 1);
   sigma_r ~ normal(0, 1);
-  
+
   beta ~ normal(1, sigma_b);
   sigma_b ~ normal(0, 1);
   

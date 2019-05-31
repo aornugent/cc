@@ -70,6 +70,9 @@ parameters{
   real<lower=0> sigma_p;
   
   vector<lower=0>[N_grp] rK;
+  // vector<lower=0>[N_pop] rK;
+  // vector<lower=0>[N_grp] mu_rK;
+  // real<lower=0> sigma_r;
   
   // predictors ordered so R- x N_grp at start
   vector<lower=0>[N_trt - N_grp] beta;
@@ -83,7 +86,7 @@ parameters{
   real<lower=0> sigma_u;
   
   // obs. error
-  vector<lower=0>[N_grp] sigma_e_sq;
+  vector<lower=0>[N_grp] sigma_e;
 }
 model{
   {
@@ -117,8 +120,8 @@ model{
 
     // Measurement model
     // Uncertainty increases with time between meas.
-    log_sigma_m_sq = log(1 + ((sigma_e_sq[grp] .* (delta_gm - 1)) ./ 
-                              ((mu .* mu) .* (delta[grp] - 1))));
+    log_sigma_m_sq = log(1 + ((1 - delta_gm) ./ (1 - delta[grp]) .* 
+                                      square(sigma_e[grp])) ./ square(mu));
     
    // Transform to log scale
     log_mu = log(mu) - 0.5 * log_sigma_m_sq;
@@ -135,19 +138,23 @@ model{
   }
   
   // priors
-  {
-    vector[N_pop] log_1;
-    vector[N_pop] log_sigma_e_sq;
-    log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop]);
-    log_1 = log(1) - 0.5 * log_sigma_e_sq;
-    p0 ~ lognormal(log_1, sqrt(log_sigma_e_sq));
-  }
+  // {
+  //   vector[N_pop] log_1;
+  //   vector[N_pop] log_sigma_e_sq;
+  //   log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop]);
+  //   log_1 = log(1) - 0.5 * log_sigma_e_sq;
+  //   p0 ~ lognormal(log_1, sqrt(log_sigma_e_sq));
+  // }
+  p0 ~ normal(mu_p[grp_pop], sigma_p);
   pK ~ normal(mu_p[grp_pop], sigma_p);
   mu_p ~ normal(1, 1);
   sigma_p ~ normal(0, 1);
   
   rK ~ normal(0, 1);
-  
+  // rK ~ normal(mu_rK[grp_pop], sigma_r);
+  // mu_rK ~ normal(0, 1);
+  // sigma_r ~ normal(0, 1);
+  // 
   beta ~ normal(1, sigma_b);
   sigma_b ~ normal(0, 1);
   
@@ -155,5 +162,5 @@ model{
   
   u ~ normal(1, sigma_u);
   sigma_u ~ normal(0, 1);
-  sigma_e_sq ~ normal(0, 1);
+  sigma_e ~ normal(0, 1);
 }
