@@ -8,22 +8,6 @@ functions {
     
     return(exp(xt));
   }
-  
-  // Eq. 7.38; Panik 2014.
-  vector beta_curve(vector x0, vector xK, 
-                    vector tK, vector tmax, 
-                    vector t, int n) {
-    
-    vector[n] log_change = log(1 + (tK - t) ./ (tK - tmax)) + 
-      log(t ./ tK) .* (tK ./ (tK - tmax));
-      
-    // back-transform and cap at 1
-    vector[n] change;
-    for(i in 1:n)
-      change[i] = t[i] > tK[i] ? 1 : exp(log_change[i]);
-    
-    return(x0 + (xK - x0) .* change);
-  }
 }
 data {
   // sizes
@@ -63,10 +47,11 @@ data {
 parameters{
   // latent starting point
   vector<lower=0>[N_pop] p0;
+  vector<lower=0>[N_grp] mu_p0;
   
   // mean abundance
   vector<lower=0>[N_pop] pK;
-  vector<lower=0>[N_grp] mu_p;
+  vector<lower=0>[N_grp] mu_pK;
   real<lower=0> sigma_p;
   
   // vector<lower=0>[N_grp] rK;
@@ -86,7 +71,9 @@ parameters{
   real<lower=0> sigma_u;
   
   // obs. error
-  vector<lower=0>[N_grp] sigma_e;
+  vector<lower=0>[N_pop] sigma_e;
+  vector<lower=0>[N_grp] mu_sigma_e;
+  real<lower=0> sigma_sigma_e;
 }
 model{
   {
@@ -121,7 +108,7 @@ model{
     // Measurement model
     // Uncertainty increases with time between meas.
     log_sigma_m_sq = log(1 + ((1 - delta_gm) ./ (1 - delta[grp]) .* 
-                                      square(sigma_e[grp])) ./ square(mu));
+                                      square(sigma_e[pop])) ./ square(mu));
     
    // Transform to log scale
     log_mu = log(mu) - 0.5 * log_sigma_m_sq;
@@ -138,16 +125,10 @@ model{
   }
   
   // priors
-  // {
-  //   vector[N_pop] log_1;
-  //   vector[N_pop] log_sigma_e_sq;
-  //   log_sigma_e_sq = log(1 + sigma_e_sq[grp_pop]);
-  //   log_1 = log(1) - 0.5 * log_sigma_e_sq;
-  //   p0 ~ lognormal(log_1, sqrt(log_sigma_e_sq));
-  // }
-  p0 ~ normal(mu_p[grp_pop], sigma_p);
-  pK ~ normal(mu_p[grp_pop], sigma_p);
-  mu_p ~ normal(1, 1);
+  p0 ~ normal(mu_p0[grp_pop], sigma_p);
+  pK ~ normal(mu_pK[grp_pop], sigma_p);
+  mu_p0 ~ normal(1, 1);
+  mu_pK ~ normal(1, 1);
   sigma_p ~ normal(0, 1);
   
   // rK ~ normal(0, 1);
@@ -162,5 +143,7 @@ model{
   
   u ~ normal(1, sigma_u);
   sigma_u ~ normal(0, 1);
-  sigma_e ~ normal(0, 1);
+  sigma_e ~ normal(mu_sigma_e[grp_pop], sigma_sigma_e);
+  mu_sigma_e ~ normal(0, 1);
+  sigma_sigma_e ~ normal(0, 1);
 }

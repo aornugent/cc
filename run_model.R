@@ -95,8 +95,11 @@ load_data <- function(fields) {
     mutate(rest = case_when(burned == 0 ~ "R-",
                             burned == 1 ~ "RB-",
                             T ~ restoration93),
-           rest = factor(rest, levels = c("R-", "RB-", "C-", "C+",
-                                          "B", "HB", "BR", "BRN", "HBR")),
+           rest = factor(rest,
+                         labels = c("C-", "B-", "C-", "C+",
+                                     "B+", "HB+", "BR+", "BRN+", "HBR+"), 
+                         levels = c("R-", "RB-", "C-", "C+",
+                                      "B", "HB", "BR", "BRN", "HBR")),
            treat = factor(treatment99, levels = c("C", "N", "B", "N/B"))) %>%
     select(plot_id, field, block, rest, yearabandoned, quad_id, treat) %>%
     distinct()
@@ -116,21 +119,21 @@ load_data <- function(fields) {
     filter(!grepl("ground|litter", species_id)) %>%
     mutate(origin = if_else(sp == "Poa_pra", "Introduced", origin)) %>%
     mutate(group = case_when(lifeform == "Grass" & 
-                               origin == "Introduced" ~ "Introduced grasses",
+                               origin == "Introduced" ~ "Non-native grasses",
                              lifeform == "Grass" &
                                origin == "Native" ~ "Native grasses",
                              func_grp == "LF" &
-                               origin == "Introduced" ~ "Introduced forbs",
+                               origin == "Introduced" ~ "Non-native forbs",
                              func_grp == "F" &
-                               origin == "Introduced" ~ "Introduced forbs",
+                               origin == "Introduced" ~ "Non-native forbs",
                              func_grp == "LF" & origin == "Native" ~ "Native forbs",
                              func_grp == "F" & origin == "Native" ~ "Native forbs",
                              func_grp == "W" ~ "Other",
                              T ~ "Other")) %>%
     mutate(group = factor(group, 
-                          levels = c("Introduced grasses", 
+                          levels = c("Non-native grasses", 
                                      "Native grasses",
-                                     "Introduced forbs",
+                                     "Non-native forbs",
                                      "Native forbs", 
                                      "Other")))
   
@@ -215,6 +218,11 @@ get_u <- function(x) {
 }
 
 get_g <- function(x) {
+  select(x, grp, group) %>%
+    unique()
+}
+
+get_tr <- function(x) {
   select(x, trt, rest, group) %>%
     unique()
 }
