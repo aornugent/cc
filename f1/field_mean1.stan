@@ -8,6 +8,22 @@ functions {
     
     return(exp(xt));
   }
+  
+  // Eq. 7.38; Panik 2014.
+  vector beta_curve(vector x0, vector xK, 
+                    vector tK, vector tmax, 
+                    vector t, int n) {
+    
+    vector[n] log_change = log(1 + (tK - t) ./ (tK - tmax)) + 
+      log(t ./ tK) .* (tK ./ (tK - tmax));
+      
+    // back-transform and cap at 1
+    vector[n] change;
+    for(i in 1:n)
+      change[i] = t[i] > tK[i] ? 1 : exp(log_change[i]);
+    
+    return(x0 + (xK - x0) .* change);
+  }
 }
 data {
   // sizes
@@ -47,102 +63,83 @@ data {
 parameters{
   // latent starting point
   vector<lower=0>[N_pop] p0;
-  vector<lower=0>[N_grp] mu_p0;
   
   // mean abundance
-  vector<lower=0>[N_pop] pK;
-  vector<lower=0>[N_grp] mu_pK;
-  real<lower=0> sigma_p;
-  
-  // vector<lower=0>[N_grp] rK;
-  vector<lower=0>[N_pop] rK;
-  vector<lower=0>[N_grp] mu_rK;
-  real<lower=0> sigma_r;
+  vector<lower=0>[N_pop] alpha_raw;
+  real<lower=0> sigma_alpha;
   
   // predictors ordered so R- x N_grp at start
-  vector<lower=0>[N_trt - N_grp] beta;
-  real<lower=0> sigma_b;
+  vector<lower=0>[N_trt - N_grp] beta_raw;
+  vector<lower=0>[N_grp] sigma_b;
   
   // correlation of error
   vector<lower=0, upper=1>[N_grp] delta;
   
   // plot random effectsQ
-  vector<lower=0>[N_plt] u;
-  real<lower=0> sigma_u;
+  vector<lower=0>[N_plt] u_raw;
+  vector<lower=0>[N_grp] sigma_u;
   
   // obs. error
-  vector<lower=0>[N_pop] sigma_e;
-  vector<lower=0>[N_grp] mu_sigma_e;
-  real<lower=0> sigma_sigma_e;
+  vector<lower=0>[N_grp] sigma_log_e;
+}
+transformed parameters {
+    // non-centered parameters
+    vector[N_pop] alpha = alpha_raw * sigma_alpha;
+    vector[N_plt] u = u_raw .* sigma_u[grp_plt];
+    vector[N_trt - N_grp] beta = beta_raw .* sigma_b[grp_trt];
 }
 model{
   {
     vector[N_trt] beta_ref;
-    vector[N] lambda;
     vector[N] mu;
     vector[N] delta_gm;
-    vector[N] log_mu;
-    vector[N] sigma_m;
-    vector[N] log_sigma_m_sq;
+    vector[N] lambda;
+    vector[N] sigma_log_m;
     
     // Intercepts only
     // Set reference class to one
     beta_ref = append_row(rep_vector(1.0, N_grp), beta);
     
     // Multiplicative fixed and random effects
-    lambda = gompertz_curve(p0[pop] .* u[plt], 
-                            pK[pop] .* u[plt] .* beta_ref[trt], 
-                            rK[pop], t, N);
+    mu = alpha[pop] .* u[plt] .* beta_ref[trt];
+    
 
     // Stochastic model
     // Adjustment for irregular meas.
     delta_gm = exp(log(delta[grp]) .* gm);
     
     // Use latent obs for first meas.
-    mu[m1] = lambda[m1] + delta_gm[m1] .*(p0[pop[m1]] .* u[plt[m1]] - lambda[m1]);
+    lambda[m1] = delta_gm[m1] .* p0[pop[m1]] .* u[plt[m1]] + 
+                        (1 - delta_gm[m1]) .* mu[m1];
     
     // Lagged meas. for remainder
-    mu[m] = lambda[m] + delta_gm[m] .* (y[m_m1] - lambda[m]);
-    
+    lambda[m] = delta_gm[m] .* y[m_m1] + (1 - delta_gm[m]) .* mu[m];
+
 
     // Measurement model
     // Uncertainty increases with time between meas.
-    log_sigma_m_sq = log(1 + ((1 - delta_gm) ./ (1 - delta[grp]) .* 
-                                      square(sigma_e[pop])) ./ square(mu));
-    
-   // Transform to log scale
-    log_mu = log(mu) - 0.5 * log_sigma_m_sq;
+    sigma_log_m = (1 - delta_gm) ./ (1 - delta[grp]) .* sigma_log_e[grp];
     
     // Abundance follows lognormal distn.
-    y[m_obs] ~ lognormal(log_mu[m_obs], sqrt(log_sigma_m_sq[m_obs]));
+    y[m_obs] ~ lognormal(log(lambda[m_obs]), sigma_log_m[m_obs]);
     
     if(cen == 1){
       // Integrate out meas. below detection
-      target += lognormal_lcdf(L[meas[m_mis]] | 
-                                log_mu[m_mis],
-                                sqrt(log_sigma_m_sq[m_mis]));
+      target += lognormal_lcdf(L[meas[m_mis]] | log(lambda[m_mis]), sigma_log_m[m_mis]);
     }
   }
   
   // priors
-  p0 ~ normal(mu_p0[grp_pop], sigma_p);
-  pK ~ normal(mu_pK[grp_pop], sigma_p);
-  mu_p0 ~ normal(1, 1);
-  mu_pK ~ normal(1, 1);
-  sigma_p ~ normal(0, 1);
+  p0 ~ lognormal(log(alpha), sigma_log_e[grp_pop]);
+  alpha_raw ~ normal(1, 1);
+  sigma_alpha ~ normal(0, 1);
   
-  rK ~ normal(mu_rK[grp_pop], sigma_r);
-  mu_rK ~ normal(0, 1);
-  sigma_r ~ normal(0, 1);
-
-  beta ~ normal(1, sigma_b);
+  beta_raw ~ normal(1, 1);
   sigma_b ~ normal(0, 1);
   
   delta ~ beta(1, 1);
   
-  u ~ normal(1, sigma_u);
+  u_raw ~ normal(1, 1);
   sigma_u ~ normal(0, 1);
-  sigma_e ~ normal(mu_sigma_e[grp_pop], sigma_sigma_e);
-  mu_sigma_e ~ normal(0, 1);
-  sigma_sigma_e ~ normal(0, 1);
+  sigma_log_e ~ normal(0, 1);
 }
