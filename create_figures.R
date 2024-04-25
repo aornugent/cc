@@ -1,8 +1,24 @@
-theme_set(
-  theme_bw() + 
-    theme(aspect.ratio = 1,
-          text = element_text(size = 12))
-)
+theme_impact <-
+  theme_bw() +
+  theme(
+    text = element_text(size = 18),
+    panel.grid = element_blank(),
+    strip.background = element_blank(),
+    axis.line.x = element_line(
+      color="black",
+      size = 0.5),
+    axis.line.y = element_line(
+      color="black",
+      size = 0.5),
+    axis.ticks = element_line(),
+    panel.spacing = unit(1, "lines"),
+    plot.title = element_text(
+      margin = margin(t = 10, b = 20),
+      hjust = -0.1, vjust = -8),
+    legend.position = "bottom",
+    aspect.ratio = 1)
+
+theme_set(theme_impact)
 
 posterior_summary <- function(diagnostics) {
   gather(diagnostics, meas, val, -par) %>%
@@ -19,20 +35,24 @@ figure_one <- function(save = T) {
   
   y <- get_y(92) %>%
     filter(group != "Other") %>%
-    left_join(x)
+    left_join(x) %>%
+    mutate(hide = if_else(rest == "C-", T, F))
   
   
-  p <- ggplot(y, aes(x = rest, y = abun_std)) +
+  p <- ggplot(y, aes(x = rest, y = abun_std, alpha = hide)) +
     geom_boxplot(aes(fill = group), width = 0.8) + 
     geom_vline(aes(xintercept = intercept), linetype = "dashed") +
     guides(fill = FALSE) + 
     facet_grid(group ~ year, scales = "free") +
+    scale_alpha_manual(values = c(1, 0.3)) +
+    guides(alpha = F) +
     labs(x = "", y = "Abundance (standardised)")+
-    theme(axis.text.x = element_text(angle = 270, hjust = 0, vjust = 0.3)) 
+    theme(axis.text.x = element_text(angle = 270, hjust = 0, vjust = 0.3),
+          aspect.ratio = .9) 
   
   if(save)
     ggsave(p, filename = "figs/figure_one.png", device = "png",
-           dpi = 600, width = 22, height = 18, units = "cm")
+           dpi = 600, width = 30, height = 26, units = "cm")
   
   return(p)
 }
@@ -121,14 +141,13 @@ figure_two <- function(x, output, stat = "mode",
     labs(x = "", y = "Abundance (standardised)", 
          fill = "") +
     guides(linetype = F, alpha = F) +
-    theme_bw() +
     theme(aspect.ratio = 1,
           axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0.3),
           legend.position = "bottom") 
   
   if(save)
     ggsave(p, filename = "figs/figure_two.png",
-           dpi = 600, width = 18, units = "cm")
+           dpi = 600, width = 22, height = 18, units = "cm")
   
   return(p)
 }
@@ -146,13 +165,17 @@ figure_two_b <- function(x, output, save = T) {
               low = quantile(val, 0.025),
               high = quantile(val, 0.975)) %>%
     left_join(get_tr(x)) %>%
-    filter(group != "Other")
+    mutate_at(vars(rest), ~ fct_recode(., `C-` = "R-"))
+  #  filter(group != "Other")
 
-
+  ref <- data.frame(rest = "C-", mean = 1, low = 1, high = 1)
+  
   p <- ggplot(beta, aes(x = rest, y = mean, ymin = low, ymax = high)) +
     geom_point() +
+    geom_point(data = ref) +
     geom_errorbar(width = 0) +
-    geom_hline(aes(yintercept = 1)) +
+    geom_hline(aes(yintercept = 1), size = 0.4) +
+    scale_x_discrete(drop = F) +
     facet_grid(~ group) +
     labs(x = "", y = "Effect size") + 
     theme_bw() +
@@ -162,7 +185,7 @@ figure_two_b <- function(x, output, save = T) {
   
   if(save)
     ggsave(p, filename = "figs/figure_two_b.png",
-           dpi = 600, width = 16, height = 6, units = "cm")
+           dpi = 600, width = 20, height = 6, units = "cm")
   
   return(p)
 }
@@ -210,8 +233,8 @@ figure_three <- function(x, output, stat = "abun", level = "grp",
     left_join(get_g(x)) %>%
     group_by(group) %>%
     summarise(label = sprintf("~ delta == %0.2f", mean(delta))) %>%
-    mutate(x = 70,
-           y = c(8.2, 9.5, 7.7, 8.5, 11.3),
+    mutate(x = 74,
+           y = 8.0,
            field = 44) %>%
     filter(group != "Other")
   
@@ -219,53 +242,119 @@ figure_three <- function(x, output, stat = "abun", level = "grp",
     geom_line(aes(y = abun_std, group = plot_id, colour = ab, alpha = hide)) +
     geom_ribbon(data = pred, aes(ymin = low, ymax = high), 
                 fill = "goldenrod2", alpha = 0.6) +
-    geom_line(data = filter(v, field == 92), color = "white",
+    geom_line(data = filter(v, field == 92), color = "white", size = 1,
               aes(y = abun_std, group = plot_id, alpha = hide)) + 
     geom_line(data = pred, aes(y = mean), color = "yellow",
               size = .8, linetype = "dashed") +
     geom_text(data = delta, aes(x = x, y = y, label = label), parse = T) +
     scale_alpha_manual(values = c(0.8, 0.2)) +
-    coord_cartesian(expand = F) +
-    facet_grid(group ~ ., scales = "free") +
+    coord_cartesian(ylim = c(0, 8.5), expand = F) +
+    facet_wrap(group ~ .) +
     labs(x = "Years since abandonment",
          y = "Abundance (standardised)", 
          fill = "", colour = "") +
-    guides(linetype = F, alpha = F) +
-    theme_bw() +
+    guides(linetype = F, alpha = F,
+           color = guide_colourbar(barwidth =unit(5, "cm"))) +
     theme(aspect.ratio = 0.7,
-      legend.position = "right") 
+      legend.position = c(.85, -0.11),
+      legend.direction = "horizontal")
+  
+  
+  # move legend outside plot
+  gt <- ggplot_gtable(ggplot_build(p))
+  nr <- max(gt$layout$b)
+  nc <- max(gt$layout$r)
+  gb <- which(gt$layout$name == "guide-box")
+  gt$layout[gb, 1:4] <- c(1, 1, nr, nc)
+  grid::grid.newpage()
+  grid::grid.draw(gt)
   
   if(save)
-    ggsave(p, filename = "figs/figure_three.png",
-           dpi = 600, width = 10, height = 17, units = "cm")
+    ggsave(last_plot(), filename = "figs/figure_three.png",
+           dpi = 600, width = 22, height = 20, units = "cm")
   
   return(p)
 }
 
-figure_four <- function(x, output) {
+figure_four <- function(x, output, stat = "mode", save = T) {
+  message("Loading model")
+  expose_stan_functions(output$model_file)
   
+  pars <- c("p0", "pK")
+  time <- get_t(x)
   
-  x <- mutate(x, hide = if_else(rest %in% c("R-", "C-"), F, T)) %>%
-    left_join(time)
+  pop <- extract_long(output$fit, pars = pars, id =  "pop") %>%
+    left_join(get_p(x)) %>%
+    group_by(sample, pop) %>%
+    mutate(t = list(0:max(time$t))) %>%
+    unnest() 
   
-  ggplot(pop, aes(x = t, y = mean)) +
-    geom_line(data = x, size = 0.7, 
-              aes(y = abun_std, group = plot_id, 
-                  alpha = hide, color = ab)) +
-    geom_ribbon(aes(ymin = low, ymax = high, group = field), 
-                fill = "white", color = "black", alpha = 0.4) +
-    geom_line(aes(y = mean, group = field),
-              color = "red", size = .8, linetype = "dashed") +
+  growth <- extract_long(output$fit, pars = "rK", id = "pop") %>%
+      left_join(get_p(x))
+
+  sigma <- extract_long(output$fit, pars = "sigma_e", id = "grp") %>%
+      left_join(get_p(x))
+    
+  pop = left_join(pop, growth) %>%
+    left_join(sigma) %>%
+    mutate(abun = gompertz_curve(p0, pK, rK, t, n()),
+           mode = abun * (1 + sigma_e^2 / abun^2)^-1.5)
+  
+  fields <- data.frame(field = unique(x$field)) %>%
+    mutate(field_id = factor(field) %>%
+             fct_relevel(., "92", "44", "53") %>%
+             as.numeric) %>%
+    arrange(field_id) %>%
+    mutate(field_label = factor(field_id, labels = paste0("F", 0:21)))
+    
+  pred <- group_by(pop, pop, t) %>%
+    quantiles(stat) %>%
+    left_join(get_p(x)) %>%
+    mutate(year = t + ab) %>%
+    filter(year %in% time$year) %>%
+    filter(group != "Other") %>%
+    left_join(fields)
+  
+  z <- mutate(x, hide = if_else(rest %in% c("R-", "C-"), F, T)) %>%
+    filter(group != "Other") %>%
+    left_join(fields)
+  
+  p <- ggplot(pred, aes(x = year, y = mean)) +
+    geom_line(data = z, size = 0.7, 
+              aes(y = abun_std, group = plot_id, alpha = hide)) +
+    geom_ribbon(aes(ymin = low, ymax = high),
+                alpha = 0.7, fill = "royalblue2") +
+    geom_line(aes(y = mean), color = "white",
+              size = 1.2, linetype = "dashed") +
     scale_alpha_manual(values = c(0.8, 0.2)) +
+    coord_cartesian(expand = F) + 
+    facet_grid(group ~ field_label, scales = "free") +
     labs(x = "", y = "Abundance (standardised)", 
          fill = "") +
     guides(linetype = F, alpha = F) +
-    facet_grid(~ group) +
-    theme_bw() +
     theme(aspect.ratio = 1,
           axis.text.x = element_text(angle = 90, hjust = 0, vjust = 0.3),
-          legend.position = "bottom")
+          legend.position = "bottom") 
+  
+  if(save) {
+    fields <- n_distinct(pred$field)
+    groups <- n_distinct(pred$group)
+    rows <- 6
+    pages <- ceiling(fields / rows)
+    
+    for(i in 1:pages) {
+      page <- p +
+        facet_grid_paginate(field_label ~ group, page = i,
+                            nrow = 6, ncol = groups, scales = "free")
+      
+      ggsave(page, filename = paste0("figs/figure_s2_page", i, ".png"),
+             device = "png", dpi = 600, width = 24, height = 32, units = "cm")
+    }
+  }
+  
+  return(p)
 }
+
 
 # Variety of lognormals, moments and transformations
 figure_zero_log <- function() {
